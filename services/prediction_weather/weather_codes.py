@@ -1,5 +1,15 @@
-# WMO Weather interpretation codes (WW)
-# https://open-meteo.com/en/docs#weathervariables
+# =============================================================================
+# WMO KODY POCASIA - preklad cisla na slovensky popis
+# =============================================================================
+# Open-Meteo API vracia pocasie ako cislo (WMO kod).
+# Tento slovnik ho prelozi na citatelny text.
+#
+# Zdroj: https://open-meteo.com/en/docs#weathervariables
+#
+# Pouzitie:
+#   from app.services.prediction_weather.weather_codes import WMO_CODES
+#   popis = WMO_CODES.get(kod, "Neznamy")
+# =============================================================================
 
 WMO_CODES = {
     0: "Jasno",

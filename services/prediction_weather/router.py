@@ -1,3 +1,18 @@
+# =============================================================================
+# ROUTER - endpointy pre predpoved pocasia
+# =============================================================================
+# Vsetky endpointy v tomto subore budu mat prefix /weather (nastaveny v main.py).
+# Priklad: @router.get("/cities") -> dostupne na /weather/cities
+#
+# Endpointy:
+#   POST /weather/cities          - prida mesto + stiahne predpoved
+#   GET  /weather/cities          - zoznam miest
+#   DEL  /weather/cities/{id}     - zmaze mesto
+#   GET  /weather/forecast/{id}/today    - predpoved od teraz do konca dna
+#   GET  /weather/forecast/{id}/tomorrow - predpoved na zajtra
+#   POST /weather/refresh         - manualne spustenie refreshu
+# =============================================================================
+
 from collections import Counter
 from datetime import date, timedelta
 
@@ -14,12 +29,14 @@ from app.services.prediction_weather.database import (
     refresh_all_cities,
 )
 
-# Router pre servis predpovede pocasia
-# Vsetky endpointy budu mat prefix /weather (nastaveny v main.py)
+# APIRouter = skupina endpointov. Na rozdiel od FastAPI() nemoze bezat
+# samostatne - musi byt zaregistrovany v hlavnej app cez include_router()
 router = APIRouter()
 
 
-# ---- Mesta ----
+# =============================================================================
+# MESTA - CRUD endpointy
+# =============================================================================
 
 @router.post("/cities")
 def create_city(
@@ -28,9 +45,10 @@ def create_city(
     lon: float = Query(ge=-180, le=180),
     _=Depends(check_api_key),
 ):
-    """Prida mesto a hned stiahne predpovede."""
+    """Prida mesto a hned stiahne predpovede na dnes a zajtra."""
     city = add_city(name, lat, lon)
 
+    # Hned po pridani stiahni predpovede
     today = date.today()
     tomorrow = today + timedelta(days=1)
     fetch_and_save(city["id"], lat, lon, today)
@@ -41,17 +59,21 @@ def create_city(
 
 @router.get("/cities")
 def list_cities(_=Depends(check_api_key)):
+    """Vrati zoznam vsetkych miest."""
     return get_all_cities()
 
 
 @router.delete("/cities/{city_id}")
 def remove_city(city_id: int, _=Depends(check_api_key)):
+    """Zmaze mesto. Predpovede sa zmazu automaticky (CASCADE)."""
     if not delete_city(city_id):
         raise HTTPException(status_code=404, detail="Mesto nenajdene")
     return {"message": "Mesto zmazane"}
 
 
-# ---- Predpovede ----
+# =============================================================================
+# PREDPOVEDE - endpointy na citanie dat
+# =============================================================================
 
 @router.get("/forecast/{city_id}/today")
 def forecast_today(city_id: int, _=Depends(check_api_key)):
@@ -90,14 +112,17 @@ def forecast_tomorrow(city_id: int, _=Depends(check_api_key)):
 
 @router.post("/refresh")
 def manual_refresh(_=Depends(check_api_key)):
-    """Manualne spustenie refreshu."""
+    """Manualne spustenie refreshu pre vsetky mesta."""
     refresh_all_cities()
     return {"message": "Refresh dokonceny"}
 
 
-# ---- Pomocne funkcie ----
+# =============================================================================
+# POMOCNE FUNKCIE
+# =============================================================================
 
 def format_rows(rows):
+    """Preformatuje DB riadky na JSON-friendly zoznam slovnikov."""
     result = []
     for row in rows:
         result.append({
@@ -115,6 +140,11 @@ def format_rows(rows):
 
 
 def build_summary(forecast):
+    """Zostavi sumarnu statistiku z predpovede (min/max teplota, zrazky, pocasie).
+
+    Counter(descriptions).most_common(1)[0][0] = najcastejsi popis pocasia.
+    Priklad: ak je 50x "Jasno" a 10x "Zamracene", vrati "Jasno".
+    """
     temps = [h["temperature_c"] for h in forecast if h["temperature_c"] is not None]
     precips = [h["precipitation_mm"] for h in forecast if h["precipitation_mm"] is not None]
     descriptions = [h["weather_description"] for h in forecast if h["weather_description"] is not None]
