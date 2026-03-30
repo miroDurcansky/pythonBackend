@@ -80,10 +80,34 @@ def build_api_url(customer):
     return f"{FORECAST_SOLAR_BASE}/{customer['latitude']}/{customer['longitude']}/{customer['tilt_deg']}/{customer['azimuth_deg']}/{customer['kwp']}"
 
 
-def fetch_and_save_for_customer(customer):
-    """Stiahne predikciu vyroby FVE pre jedneho zakaznika a ulozi do databazy."""
+def has_forecast_today(customer_id):
+    """Skontroluje ci uz existuju zaznamy pre dnesok pre daneho zakaznika."""
+    conn = get_connection()
+    cursor = conn.cursor()
+    cursor.execute(
+        """
+        SELECT COUNT(*) FROM solar_forecasts
+        WHERE customer_id = %s AND time >= CURRENT_DATE AND time < (CURRENT_DATE + INTERVAL '1 day')
+        """,
+        (customer_id,),
+    )
+    count = cursor.fetchone()[0]
+    conn.close()
+    return count > 0
+
+
+def fetch_and_save_for_customer(customer, force=False):
+    """Stiahne predikciu vyroby FVE pre jedneho zakaznika a ulozi do databazy.
+    Ak uz pre dnesok existuju zaznamy, preskoci API volanie (setrenie rate limitu).
+    force=True vynuti stiahnutie aj ked data uz existuju."""
     customer_id = customer["id"]
     customer_name = customer["name"]
+
+    # Skontroluj ci uz mame data pre dnesok (ak nie je force)
+    if not force and has_forecast_today(customer_id):
+        cas = datetime.now().strftime("%H:%M:%S")
+        print(f"[SOLAR] {cas} | {customer_name} | uz existuju zaznamy pre dnesok, preskakujem API volanie")
+        return
 
     # 1. Stiahni data z API
     url = build_api_url(customer)
@@ -164,15 +188,16 @@ def fetch_and_save_for_customer(customer):
         print(f"[SOLAR] {cas} | {customer_name} | bez zmien | denne celkom: {total_wh_day} Wh")
 
 
-def refresh_all_customers():
-    """Stiahne predikcie pre vsetkych zakaznikov."""
+def refresh_all_customers(force=False):
+    """Stiahne predikcie pre vsetkych zakaznikov.
+    force=True vynuti stiahnutie aj ked data uz existuju."""
     customers = get_all_customers()
     cas = datetime.now().strftime("%H:%M:%S")
-    print(f"[SOLAR REFRESH] Spusteny o {cas} pre {len(customers)} zakaznikov")
+    print(f"[SOLAR REFRESH] Spusteny o {cas} pre {len(customers)} zakaznikov (force={force})")
 
     for customer in customers:
         try:
-            fetch_and_save_for_customer(customer)
+            fetch_and_save_for_customer(customer, force=force)
         except Exception as e:
             print(f"[SOLAR REFRESH] {customer['name']} - CHYBA: {e}")
 

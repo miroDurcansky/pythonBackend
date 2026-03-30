@@ -97,6 +97,6 @@ def solar_forecast_today(customer_id: int, _=Depends(check_api_key)):
 
 @router.post("/refresh")
 def solar_refresh(_=Depends(check_api_key)):
-    """Manualne spustenie refreshu pre vsetkych zakaznikov."""
-    refresh_all_customers()
+    """Manualne spustenie refreshu pre vsetkych zakaznikov. Vynuti nove stiahnutie aj ked data uz existuju."""
+    refresh_all_customers(force=True)
     return {"message": "Solar forecast refresh dokonceny pre vsetkych zakaznikov"}
